@@ -496,6 +496,34 @@ function renderMiCalendario(){
 }
 
 function renderSolicitudes(){
+  const people = rotationOrder();
+  const personOptions = people.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const typeOptions = REASON_TYPES.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+  const rangeForm = people.length===0 ? '' : `
+    <div class="card">
+      <div class="card-title">Marcar un periodo entero para alguien (ej: 20 días de vacaciones de golpe)</div>
+      <label class="small">Persona</label>
+      <select id="rangePerson">${personOptions}</select>
+      <label class="small" style="margin-top:10px;">Motivo</label>
+      <select id="rangeType">${typeOptions}</select>
+      <div id="rangeJustifWrap" style="margin-top:10px;">
+        <label class="small">Justificación</label>
+        <textarea id="rangeJustif" rows="2"></textarea>
+      </div>
+      <div class="range-row" style="margin-top:10px;">
+        <div class="field">
+          <label class="small">Desde</label>
+          <input type="date" id="rangeStart" value="${todayStr()}">
+        </div>
+        <div class="field">
+          <label class="small">Hasta</label>
+          <input type="date" id="rangeEnd" value="${todayStr()}">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="submitRangeBtn" style="margin-top:12px;">Aplicar a todo el periodo</button>
+    </div>
+  `;
+
   const pending = state.exceptions.filter(e=>e.status==='pending').sort((a,b)=>a.createdAt-b.createdAt);
   let list = pending.length===0 ? `<div class="empty-state">No hay solicitudes pendientes.</div>` : pending.map(e=>{
     const person = state.people.find(p=>p.id===e.personId);
@@ -534,6 +562,7 @@ function renderSolicitudes(){
   }).join('');
 
   return `
+    ${rangeForm}
     <div class="card"><div class="card-title">Solicitudes pendientes</div>${list}</div>
     <div class="card">
       <div class="card-title">Todas las excepciones (revisar / limpiar)</div>
@@ -769,6 +798,24 @@ function attachHandlers(){
   }
 
   if(state.activeTab==='solicitudes'){
+    const rangeType = document.getElementById('rangeType');
+    const rangeJustifWrap = document.getElementById('rangeJustifWrap');
+    if(rangeType){ const sync=()=>{ rangeJustifWrap.style.display = rt(rangeType.value).needsJustif?'block':'none'; }; sync(); rangeType.addEventListener('change', sync); }
+    const submitRangeBtn = document.getElementById('submitRangeBtn');
+    if(submitRangeBtn) submitRangeBtn.addEventListener('click', async ()=>{
+      const personId = document.getElementById('rangePerson').value;
+      const type = document.getElementById('rangeType').value;
+      const justif = document.getElementById('rangeJustif').value.trim();
+      const start = document.getElementById('rangeStart').value;
+      const end = document.getElementById('rangeEnd').value;
+      if(!start || !end || end < start){ alert('Revisa las fechas.'); return; }
+      if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
+      state.exceptions.push({
+        id: uid(), personId, type, justification: rt(type).needsJustif? justif:'',
+        start, end, status:'approved', createdAt: Date.now()
+      });
+      await persistShared(); render();
+    });
     document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
       const e = state.exceptions.find(x=>x.id===el.getAttribute('data-approve')); if(e) e.status='approved';
       await persistShared(); render();
