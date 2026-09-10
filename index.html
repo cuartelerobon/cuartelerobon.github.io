@@ -84,6 +84,8 @@
   .cal-dot{ position:absolute; bottom:3px; width:5px;height:5px;border-radius:50%; }
   .cal-dot.approved{background:var(--amber);}
   .cal-dot.pending{background:transparent; border:1px dashed var(--amber);}
+  .cal-dot.duty{background:#c1453a; left:3px; bottom:3px;}
+  .cal-day.on-duty{ box-shadow: inset 0 0 0 2px #c1453a; }
   .selection-bar{ background:var(--panel-2); border:1px solid var(--olive); border-radius:4px; padding:12px; margin-top:14px; }
 
   /* ROSTER GRID */
@@ -418,16 +420,22 @@ function renderMiCalendario(){
   const daysInMonth = new Date(y,m+1,0).getDate();
   const today = todayStr();
 
+  const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const monthEnd = `${y}-${String(m+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+  const monthSchedule = computeSchedule(monthStart, monthEnd);
+
   let cells = '';
   for(let i=0;i<startOffset;i++) cells += `<div class="cal-day blank"></div>`;
   for(let day=1; day<=daysInMonth; day++){
     const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const appr = approvedFor(me.id, ds).length>0;
     const pend = pendingFor(me.id, ds).length>0;
+    const onDuty = monthSchedule[ds] === me.id;
     const selected = state.calSelected.has(ds);
     const isToday = ds===today;
-    cells += `<div class="cal-day ${selected?'selected':''} ${isToday?'today-marker':''}" data-day="${ds}">
+    cells += `<div class="cal-day ${selected?'selected':''} ${isToday?'today-marker':''} ${onDuty?'on-duty':''}" data-day="${ds}">
       ${day}
+      ${onDuty && !selected? `<span class="cal-dot duty"></span>`:''}
       ${appr && !selected? `<span class="cal-dot approved"></span>`:''}
       ${pend && !selected? `<span class="cal-dot pending"></span>`:''}
     </div>`;
@@ -477,6 +485,7 @@ function renderMiCalendario(){
         ${DOW_MON.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
         ${cells}
       </div>
+      <div class="hint">🔴 Punto rojo = te toca cuartelero ese día.</div>
       ${selectionBar}
     </div>
     <div class="card">
@@ -547,6 +556,8 @@ function renderPersonal(){
           <button data-move="${p.id}:down" ${i===list.length-1?'disabled':''}>▼</button>
         </div>
         <div class="person-name">${p.name} ${isAdmin(p.id)?'<span class="admin-star">★ admin</span>':''}</div>
+        <button class="btn btn-secondary btn-sm" data-editname="${p.id}">Nombre</button>
+        <button class="btn btn-secondary btn-sm" data-togglerank="${p.id}">${p.rank==='cabo'?'→ SDO':'→ CBO'}</button>
         <button class="btn btn-secondary btn-sm" data-editpin="${p.id}">PIN</button>
         ${isCreator? `<button class="btn btn-secondary btn-sm" data-toggleadmin="${p.id}">${isAdmin(p.id)?'Quitar admin':'Hacer admin'}</button>`:''}
         <button class="btn btn-danger btn-sm" data-remove="${p.id}">✕</button>
@@ -570,7 +581,7 @@ function renderPersonal(){
       <label class="small">Nombre</label>
       <input type="text" id="newPersonName" placeholder="Nombre y apellido">
       <label class="small" style="margin-top:10px;">Empleo</label>
-      <select id="newPersonRank"><option value="cabo">Cabo</option><option value="soldado">Soldado</option></select>
+      <select id="newPersonRank"><option value="cabo">CBO</option><option value="soldado">SDO</option></select>
       <label class="small" style="margin-top:10px;">Código personal (PIN)</label>
       <input type="text" id="newPersonPin" placeholder="Ej: 4821">
       <button class="btn btn-primary btn-block" id="addPersonBtn" style="margin-top:12px;">Añadir a la lista</button>
@@ -643,7 +654,7 @@ function renderLogin(){
     return;
   }
   const rows = state.people.map(p=>`
-    <div class="login-btn" data-login="${p.id}"><span>${p.name}</span><span class="rank-pill ${p.rank}">${p.rank==='cabo'?'CABO':'SOLDADO'}</span></div>
+    <div class="login-btn" data-login="${p.id}"><span>${p.name}</span><span class="rank-pill ${p.rank}">${p.rank==='cabo'?'CBO':'SDO'}</span></div>
   `).join('');
   app.innerHTML = `
     <header><div class="unit-title">🪖 Turnos de Cuartelero</div><div class="hint" style="margin-top:8px;">Elige tu nombre y luego tu código personal.</div></header>
@@ -808,6 +819,24 @@ function attachHandlers(){
     document.querySelectorAll('[data-toggleadmin]').forEach(el=>el.addEventListener('click', async ()=>{
       const id = el.getAttribute('data-toggleadmin');
       if(state.admins.includes(id)) state.admins = state.admins.filter(a=>a!==id); else state.admins.push(id);
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-togglerank]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-togglerank');
+      const p = state.people.find(x=>x.id===id);
+      const newRank = p.rank==='cabo' ? 'soldado' : 'cabo';
+      const sib = state.people.filter(x=>x.rank===newRank);
+      const maxOrder = sib.length? Math.max(...sib.map(x=>x.order)) : 0;
+      p.rank = newRank;
+      p.order = maxOrder+1;
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-editname]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-editname');
+      const p = state.people.find(x=>x.id===id);
+      const newName = prompt('Nuevo nombre para esta persona (empleo + apellido, ej: "Soldado Gallega")', p.name);
+      if(newName===null || newName.trim()==='') return;
+      p.name = newName.trim();
       await persistShared(); render();
     }));
     document.querySelectorAll('[data-editpin]').forEach(el=>el.addEventListener('click', async ()=>{
