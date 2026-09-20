@@ -173,6 +173,79 @@ async function sGetSafe(key, shared){
   }catch(e){ console.error('sGetSafe error', key, e); return {ok:false, value:null}; }
 }
 
+// ---------- EXCEPTIONS (own table, one row each — no more full-object overwrite) ----------
+// Each exception now lives as its own row in the `exceptions` table, so two
+// people saving at the same time only ever touch their own row instead of
+// racing to overwrite one giant JSON blob.
+function rowToException(r){
+  return {
+    id: r.id,
+    personId: r.person_id,
+    type: r.type,
+    justification: r.justification || '',
+    start: r.start_date,
+    end: r.end_date,
+    status: r.status,
+    createdAt: Number(r.created_at),
+  };
+}
+function exceptionToRow(e){
+  return {
+    id: e.id,
+    person_id: e.personId,
+    type: e.type,
+    start_date: e.start,
+    end_date: e.end,
+    status: e.status,
+    justification: e.justification || '',
+    created_at: e.createdAt,
+  };
+}
+async function fetchExceptions(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?select=*&apikey=${SUPABASE_KEY}`);
+    if(!res.ok) throw new Error('Supabase GET exceptions failed: '+res.status);
+    const rows = await res.json();
+    return {ok:true, value: rows.map(rowToException)};
+  }catch(e){ console.error('fetchExceptions error', e); return {ok:false, value:[]}; }
+}
+async function insertExceptions(list){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?apikey=${SUPABASE_KEY}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
+      body: JSON.stringify(list.map(exceptionToRow))
+    });
+    if(!res.ok) throw new Error('Supabase INSERT exceptions failed: '+res.status);
+    return true;
+  }catch(e){ console.error('insertExceptions error', e); alert('⚠ No se ha podido guardar (fallo de conexión). Vuelve a intentarlo.'); return false; }
+}
+async function updateExceptionField(id, fields){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
+      body: JSON.stringify(fields)
+    });
+    if(!res.ok) throw new Error('Supabase UPDATE exception failed: '+res.status);
+    return true;
+  }catch(e){ console.error('updateExceptionField error', e); alert('⚠ No se ha podido guardar el cambio (fallo de conexión).'); return false; }
+}
+async function deleteExceptionRow(id){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
+    if(!res.ok) throw new Error('Supabase DELETE exception failed: '+res.status);
+    return true;
+  }catch(e){ console.error('deleteExceptionRow error', e); alert('⚠ No se ha podido borrar (fallo de conexión).'); return false; }
+}
+async function deleteAllExceptionRows(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=not.is.null&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
+    if(!res.ok) throw new Error('Supabase DELETE all exceptions failed: '+res.status);
+    return true;
+  }catch(e){ console.error('deleteAllExceptionRows error', e); alert('⚠ No se ha podido vaciar (fallo de conexión).'); return false; }
+}
+
 // ---------- CONSTANTS ----------
 const REASON_TYPES = [
   {id:'guardia', label:'Guardia', short:'GDA', needsJustif:false},
@@ -207,6 +280,8 @@ function nextMonday(){ const t=todayStr(); const d=dowIndex(t); const fwd = d===
 function isAdmin(id){ return state.admins.includes(id); }
 function currentPerson(){ return state.people.find(p=>p.id===state.currentUserId); }
 
+// Returns true if it had to seed defaults (empty roster) — the caller uses
+// this to decide whether a first-run write to Supabase is actually needed.
 function seedIfEmpty(){
   if(state.people.length===0){
     const sample=[
@@ -221,7 +296,9 @@ function seedIfEmpty(){
     state.creatorId = state.people[0].id;
     state.admins = [state.people[0].id];
     state.anchorDate = nextMonday();
+    return true;
   }
+  return false;
 }
 
 // ---------- ROTATION ----------
@@ -695,10 +772,12 @@ function renderLogin(){
 }
 
 // ---------- PERSISTENCE ----------
+// Only people/admins/creatorId/anchorDate live here now — this blob changes
+// rarely, so the risk of two people overwriting each other is low. Exceptions
+// no longer travel through this function at all (see EXCEPTIONS section above).
 async function persistShared(){
   const ok = await sSet('appState', {
     people: state.people,
-    exceptions: state.exceptions,
     admins: state.admins,
     creatorId: state.creatorId,
     anchorDate: state.anchorDate,
@@ -739,21 +818,29 @@ function attachHandlers(){
       const justif = document.getElementById('quickJustif').value.trim();
       if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
       const {personId, date} = state.rosterClicked;
-      state.exceptions.push({id:uid(), personId, type, justification:justif, start:date, end:date, status:'approved', createdAt:Date.now()});
-      await persistShared(); render();
+      const exc = {id:uid(), personId, type, justification:justif, start:date, end:date, status:'approved', createdAt:Date.now()};
+      const ok = await insertExceptions([exc]);
+      if(ok){ state.exceptions.push(exc); state.rosterClicked=null; }
+      render();
     });
     document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
-      const e = state.exceptions.find(x=>x.id===el.getAttribute('data-approve')); if(e) e.status='approved';
-      await persistShared(); render();
+      const id = el.getAttribute('data-approve');
+      const ok = await updateExceptionField(id, {status:'approved'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      render();
     }));
     document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
-      const e = state.exceptions.find(x=>x.id===el.getAttribute('data-reject')); if(e) e.status='rejected';
-      await persistShared(); render();
+      const id = el.getAttribute('data-reject');
+      const ok = await updateExceptionField(id, {status:'rejected'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      render();
     }));
     document.querySelectorAll('[data-removeexc]').forEach(el=>el.addEventListener('click', async ()=>{
       if(!confirm('¿Quitar esta excepción? La persona volverá a entrar en la rotación normal ese día.')) return;
-      state.exceptions = state.exceptions.filter(x=>x.id!==el.getAttribute('data-removeexc'));
-      await persistShared(); render();
+      const id = el.getAttribute('data-removeexc');
+      const ok = await deleteExceptionRow(id);
+      if(ok){ state.exceptions = state.exceptions.filter(x=>x.id!==id); state.rosterClicked=null; }
+      render();
     }));
   }
 
@@ -785,15 +872,19 @@ function attachHandlers(){
       if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
       const me = currentPerson();
       const status = isAdmin(me.id) ? 'approved' : 'pending';
+      const newExcs = [];
       state.calSelected.forEach(ds=>{
-        state.exceptions.push({id:uid(), personId:me.id, type, justification: rt(type).needsJustif? justif:'', start:ds, end:ds, status, createdAt:Date.now()});
+        newExcs.push({id:uid(), personId:me.id, type, justification: rt(type).needsJustif? justif:'', start:ds, end:ds, status, createdAt:Date.now()});
       });
-      state.calSelected = new Set();
-      await persistShared(); render();
+      const ok = await insertExceptions(newExcs);
+      if(ok){ state.exceptions.push(...newExcs); state.calSelected = new Set(); }
+      render();
     });
     document.querySelectorAll('[data-cancel]').forEach(el=>el.addEventListener('click', async ()=>{
-      state.exceptions = state.exceptions.filter(e=>e.id!==el.getAttribute('data-cancel'));
-      await persistShared(); render();
+      const id = el.getAttribute('data-cancel');
+      const ok = await deleteExceptionRow(id);
+      if(ok){ state.exceptions = state.exceptions.filter(e=>e.id!==id); }
+      render();
     }));
   }
 
@@ -810,30 +901,39 @@ function attachHandlers(){
       const end = document.getElementById('rangeEnd').value;
       if(!start || !end || end < start){ alert('Revisa las fechas.'); return; }
       if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
-      state.exceptions.push({
+      const exc = {
         id: uid(), personId, type, justification: rt(type).needsJustif? justif:'',
         start, end, status:'approved', createdAt: Date.now()
-      });
-      await persistShared(); render();
+      };
+      const ok = await insertExceptions([exc]);
+      if(ok) state.exceptions.push(exc);
+      render();
     });
     document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
-      const e = state.exceptions.find(x=>x.id===el.getAttribute('data-approve')); if(e) e.status='approved';
-      await persistShared(); render();
+      const id = el.getAttribute('data-approve');
+      const ok = await updateExceptionField(id, {status:'approved'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      render();
     }));
     document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
-      const e = state.exceptions.find(x=>x.id===el.getAttribute('data-reject')); if(e) e.status='rejected';
-      await persistShared(); render();
+      const id = el.getAttribute('data-reject');
+      const ok = await updateExceptionField(id, {status:'rejected'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      render();
     }));
     document.querySelectorAll('[data-deleteexc]').forEach(el=>el.addEventListener('click', async ()=>{
       if(!confirm('¿Borrar esta excepción?')) return;
-      state.exceptions = state.exceptions.filter(x=>x.id!==el.getAttribute('data-deleteexc'));
-      await persistShared(); render();
+      const id = el.getAttribute('data-deleteexc');
+      const ok = await deleteExceptionRow(id);
+      if(ok) state.exceptions = state.exceptions.filter(x=>x.id!==id);
+      render();
     }));
     const clearAllExcBtn = document.getElementById('clearAllExcBtn');
     if(clearAllExcBtn) clearAllExcBtn.addEventListener('click', async ()=>{
       if(!confirm('¿Vaciar TODAS las excepciones de todo el mundo? Esto no se puede deshacer.')) return;
-      state.exceptions = [];
-      await persistShared(); render();
+      const ok = await deleteAllExceptionRows();
+      if(ok) state.exceptions = [];
+      render();
     });
   }
 
@@ -912,24 +1012,28 @@ function attachHandlers(){
 
 // ---------- INIT ----------
 async function init(){
-  const [appRes, userRes] = await Promise.all([
+  const [appRes, userRes, excRes] = await Promise.all([
     sGetSafe('appState', true),
     sGetSafe('currentUserId', false),
+    fetchExceptions(),
   ]);
-  if(!appRes.ok){
+  if(!appRes.ok || !excRes.ok){
     renderConnError();
     return;
   }
   const s = appRes.value || {};
   state.people = s.people || [];
-  state.exceptions = s.exceptions || [];
+  state.exceptions = excRes.value;
   state.admins = s.admins || [];
   state.creatorId = s.creatorId || null;
   state.anchorDate = s.anchorDate || null;
   state.currentUserId = userRes.ok ? (userRes.value || null) : null;
-  seedIfEmpty();
+  const wasSeeded = seedIfEmpty();
   if(state.currentUserId && !state.people.find(p=>p.id===state.currentUserId)) state.currentUserId = null;
-  await persistShared();
+  // Only write back on first run (when we had to invent a default roster).
+  // Every other load just reads — it no longer blindly re-saves what it
+  // fetched, which was what let a stale, long-open tab clobber newer changes.
+  if(wasSeeded){ await persistShared(); }
   render();
 }
 
