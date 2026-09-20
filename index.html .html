@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Turnos de Cuartelero</title>
+<style>
+  :root{
+    --bg: #15170f;
+    --panel: #1e2117;
+    --panel-2: #262a1c;
+    --line: #363c28;
+    --olive: #6b7d4f;
+    --olive-dim: #4d5a38;
+    --amber: #d1a24a;
+    --amber-dim: #8a6d34;
+    --text: #e9e6d8;
+    --text-dim: #a3a68f;
+    --danger: #a5503c;
+    --radius: 4px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+  .app{max-width:560px;margin:0 auto;padding:0 14px;}
+
+  header{ padding: 22px 0 14px 0; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .unit-title{ font-size: 20px; font-weight: 700; letter-spacing: 0.03em; display:flex; align-items:center; gap:10px; }
+  .unit-title .tag{ font-size: 10px; letter-spacing: 0.12em; color: var(--bg); background: var(--olive); padding: 3px 7px; border-radius: 2px; font-weight: 700; }
+  .user-row{ margin-top: 10px; display:flex; align-items:center; justify-content:space-between; font-size: 13.5px; color: var(--text-dim); }
+  .user-row b{color:var(--text); font-weight:600;}
+  .switch-link{ color: var(--amber); text-decoration: none; font-size: 13px; }
+
+  .tabs{ display:flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; }
+  .tab{ flex: 0 0 auto; padding: 9px 13px; border-radius: var(--radius); background: var(--panel); color: var(--text-dim); font-size: 13px; font-weight: 600; border: 1px solid var(--line); cursor:pointer; white-space: nowrap; position: relative; }
+  .tab.active{ background: var(--olive-dim); color: var(--text); border-color: var(--olive); }
+  .tab .badge{ position:absolute; top:-6px; right:-6px; background: var(--amber); color: #1a1a10; font-size: 10px; font-weight:800; border-radius: 50%; width:17px;height:17px; display:flex;align-items:center;justify-content:center; }
+
+  .card{ background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .card-title{ font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; font-weight: 700; }
+
+  .login-list{display:flex; flex-direction:column; gap:8px;}
+  .login-btn{ background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 13px 14px; border-radius: var(--radius); font-size: 15px; text-align:left; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+  .login-btn:active{background: var(--olive-dim); border-color: var(--olive);}
+  .rank-pill{ font-size: 10.5px; letter-spacing:0.06em; padding: 3px 7px; border-radius: 2px; font-weight:700; color: var(--bg); }
+  .rank-pill.cabo{background: var(--amber);}
+  .rank-pill.soldado{background: var(--olive);}
+
+  label.small{ display:block; font-size: 11px; color: var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.06em; }
+  input[type=date], input[type=number], input[type=text], input[type=password], select, textarea{
+    width:100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    padding: 11px 10px; border-radius: var(--radius); font-size: 15px; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus{ outline: none; border-color: var(--olive); }
+
+  .btn{ display:inline-block; padding: 12px 16px; border-radius: var(--radius); font-size: 14.5px; font-weight: 700; border: none; cursor: pointer; text-align:center; }
+  .btn-primary{background: var(--olive); color: #12140d;}
+  .btn-block{width:100%;}
+  .btn-secondary{background: transparent; border:1px solid var(--line); color: var(--text);}
+  .btn-danger{background: transparent; border:1px solid var(--danger); color: var(--danger);}
+  .btn-sm{padding:8px 11px; font-size:12.5px;}
+  .btn-row{display:flex; gap:8px;}
+  .btn-row .btn{flex:1;}
+  .error-text{color:var(--danger); font-size:13px; margin-top:8px;}
+  .hint{font-size:12.5px; color:var(--text-dim); margin-top:6px; line-height:1.4;}
+  .empty-state{ text-align:center; color: var(--text-dim); padding: 26px 10px; font-size: 14px; }
+
+  /* MONTH CALENDAR */
+  .month-nav{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .month-nav .label{ font-size:15px; font-weight:700; text-transform:capitalize; }
+  .month-nav button{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); width:36px;height:36px; border-radius:4px; font-size:17px; cursor:pointer; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .cal-dow{ font-size:10px; color:var(--text-dim); text-align:center; text-transform:uppercase; letter-spacing:0.03em; padding-bottom:4px; }
+  .cal-day{ aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:5px; background:var(--panel-2); border:1px solid var(--line); font-size:13.5px; cursor:pointer; position:relative; color:var(--text); }
+  .cal-day.blank{ visibility:hidden; cursor:default; }
+  .cal-day.selected{ background:var(--olive); color:#12140d; border-color:var(--olive); font-weight:700; }
+  .cal-day.today-marker{ border-color:var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
+  .cal-dot{ position:absolute; bottom:3px; width:5px;height:5px;border-radius:50%; }
+  .cal-dot.approved{background:var(--amber);}
+  .cal-dot.pending{background:transparent; border:1px dashed var(--amber);}
+  .cal-dot.duty{background:#c1453a; left:3px; bottom:3px;}
+  .cal-day.on-duty{ box-shadow: inset 0 0 0 2px #c1453a; }
+  .selection-bar{ background:var(--panel-2); border:1px solid var(--olive); border-radius:4px; padding:12px; margin-top:14px; }
+
+  /* ROSTER GRID */
+  .roster-nav{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:6px; }
+  .roster-nav .label{font-size:13.5px; font-weight:700; color:var(--text-dim);}
+  .roster-nav button{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; cursor:pointer; }
+  .roster-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:4px; -webkit-overflow-scrolling:touch; }
+  table.roster{ border-collapse:collapse; width:100%; }
+  table.roster th, table.roster td{ border-bottom:1px solid var(--line); border-right:1px solid var(--line); text-align:center; padding:0; }
+  table.roster th{ background:var(--panel); font-size:9.5px; color:var(--text-dim); padding:6px 2px; font-weight:700; min-width:38px; }
+  table.roster th.today-col, table.roster td.today-col{ background: rgba(209,162,74,0.09); }
+  th.name-col, td.name-col{ position:sticky; left:0; background:var(--panel); z-index:2; text-align:left !important; padding:9px 10px !important; font-size:12px; font-weight:600; min-width:104px; border-right:2px solid var(--olive-dim); }
+  td.day-cell{ height:40px; cursor:pointer; }
+  td.day-cell.clicked{ outline: 2px solid var(--amber); outline-offset:-2px; }
+  .cbadge{ font-size:9px; font-weight:800; border-radius:2px; padding:2px 3px; display:inline-block; }
+  .cbadge.duty{background:var(--olive); color:#12140d;}
+  .cbadge.approved{background:var(--amber-dim); color:#f4e6c8;}
+  .cbadge.pending{background:transparent; border:1px dashed var(--amber); color:var(--amber);}
+
+  .info-box{ margin-top:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:12px; font-size:13.5px; }
+  .info-box .who{font-weight:700; margin-bottom:2px;}
+  .warn-banner{ background: rgba(165,80,60,0.15); border:1px solid var(--danger); color:#f0c9be; border-radius:4px; padding:10px 12px; font-size:12.5px; margin-bottom:12px; line-height:1.4; }
+  .pin-dots{ display:flex; gap:10px; justify-content:center; margin: 4px 0 14px 0; }
+  .pin-dots div{ width:14px; height:14px; border-radius:50%; border:1px solid var(--line); background:var(--panel-2); }
+
+  .req-item{ border-bottom: 1px solid var(--line); padding: 11px 0; }
+  .req-item:last-child{border:none;}
+  .req-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .req-type{font-size:14.5px; font-weight:700;}
+  .req-dates{font-size:12.5px; color:var(--text-dim); margin-top:2px;}
+  .req-justif{font-size:13px; color:var(--text-dim); margin-top:6px; font-style:italic; background:var(--panel-2); padding:8px; border-radius:3px;}
+  .req-person{font-size:13px; color:var(--text-dim); margin-bottom:2px;}
+  .status-chip{ font-size:10px; padding:3px 7px; border-radius: 2px; font-weight:700; letter-spacing:0.03em; }
+
+  .person-row{ display:flex; align-items:center; gap:8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .person-row:last-child{border:none;}
+  .person-name{flex:1; font-size:14.5px; font-weight:600;}
+  .order-btns{display:flex; flex-direction:column; gap:2px;}
+  .order-btns button{ background: var(--panel-2); border: 1px solid var(--line); color: var(--text); width: 26px; height:22px; border-radius: 3px; font-size: 12px; cursor:pointer; }
+  .admin-star{color: var(--amber); font-size:12px; margin-left:4px;}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+// ---------- STORAGE (Supabase) ----------
+const SUPABASE_URL = 'https://pmarqdbrnpjtxcavggax.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_70hqSYnCsQBW_9qWf_RJ6Q_DcvZ_Dcj';
+
+async function sSet(key, value, shared){
+  if(shared === false){
+    try{ localStorage.setItem('local_'+key, JSON.stringify(value)); }catch(e){ console.error(e); }
+    return true;
+  }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?apikey=${SUPABASE_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({key, value})
+    });
+    if(!res.ok) throw new Error('Supabase SET failed: '+res.status);
+    return true;
+  }catch(e){ console.error('sSet error', key, e); return false; }
+}
+
+// Like a plain read, but tells us whether the read actually succeeded (ok:true)
+// or failed due to a connection problem (ok:false) — so a network hiccup
+// is never confused with "the table is genuinely empty".
+async function sGetSafe(key, shared){
+  if(shared === false){
+    try{
+      const raw = localStorage.getItem('local_'+key);
+      return {ok:true, value: raw ? JSON.parse(raw) : null};
+    }catch(e){ return {ok:false, value:null}; }
+  }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value&apikey=${SUPABASE_KEY}`);
+    if(!res.ok) throw new Error('Supabase GET failed: '+res.status);
+    const data = await res.json();
+    return {ok:true, value: (data && data.length>0) ? data[0].value : null};
+  }catch(e){ console.error('sGetSafe error', key, e); return {ok:false, value:null}; }
+}
+
+// ---------- EXCEPTIONS (own table, one row each — no more full-object overwrite) ----------
+// Each exception now lives as its own row in the `exceptions` table, so two
+// people saving at the same time only ever touch their own row instead of
+// racing to overwrite one giant JSON blob.
+function rowToException(r){
+  return {
+    id: r.id,
+    personId: r.person_id,
+    type: r.type,
+    justification: r.justification || '',
+    start: r.start_date,
+    end: r.end_date,
+    status: r.status,
+    createdAt: Number(r.created_at),
+  };
+}
+function exceptionToRow(e){
+  return {
+    id: e.id,
+    person_id: e.personId,
+    type: e.type,
+    start_date: e.start,
+    end_date: e.end,
+    status: e.status,
+    justification: e.justification || '',
+    created_at: e.createdAt,
+  };
+}
+async function fetchExceptions(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?select=*&apikey=${SUPABASE_KEY}`);
+    if(!res.ok) throw new Error('Supabase GET exceptions failed: '+res.status);
+    const rows = await res.json();
+    return {ok:true, value: rows.map(rowToException)};
+  }catch(e){ console.error('fetchExceptions error', e); return {ok:false, value:[]}; }
+}
+async function insertExceptions(list){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?apikey=${SUPABASE_KEY}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
+      body: JSON.stringify(list.map(exceptionToRow))
+    });
+    if(!res.ok) throw new Error('Supabase INSERT exceptions failed: '+res.status);
+    return true;
+  }catch(e){ console.error('insertExceptions error', e); alert('⚠ No se ha podido guardar (fallo de conexión). Vuelve a intentarlo.'); return false; }
+}
+async function updateExceptionField(id, fields){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
+      body: JSON.stringify(fields)
+    });
+    if(!res.ok) throw new Error('Supabase UPDATE exception failed: '+res.status);
+    return true;
+  }catch(e){ console.error('updateExceptionField error', e); alert('⚠ No se ha podido guardar el cambio (fallo de conexión).'); return false; }
+}
+async function deleteExceptionRow(id){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
+    if(!res.ok) throw new Error('Supabase DELETE exception failed: '+res.status);
+    return true;
+  }catch(e){ console.error('deleteExceptionRow error', e); alert('⚠ No se ha podido borrar (fallo de conexión).'); return false; }
+}
+async function deleteAllExceptionRows(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=not.is.null&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
+    if(!res.ok) throw new Error('Supabase DELETE all exceptions failed: '+res.status);
+    return true;
+  }catch(e){ console.error('deleteAllExceptionRows error', e); alert('⚠ No se ha podido vaciar (fallo de conexión).'); return false; }
+}
+
+// ---------- CONSTANTS ----------
+const REASON_TYPES = [
+  {id:'guardia', label:'Guardia', short:'GDA', needsJustif:false},
+  {id:'da', label:'DA', short:'DA', needsJustif:true},
+  {id:'do', label:'DO', short:'DO', needsJustif:true},
+  {id:'ap', label:'AP', short:'AP', needsJustif:true},
+  {id:'ejercicios', label:'Ejercicios / Maniobras', short:'EJE', needsJustif:true},
+  {id:'vacaciones', label:'Vacaciones', short:'VAC', needsJustif:true},
+  {id:'otro', label:'Otro', short:'OTR', needsJustif:true},
+];
+function rt(id){ return REASON_TYPES.find(r=>r.id===id) || {label:id, short:'?', needsJustif:true}; }
+const DOW_MON = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+// ---------- STATE ----------
+let state = {
+  people: [], exceptions: [], admins: [], creatorId: null, anchorDate: null,
+  currentUserId: null, loginStep:'choose', loginPersonId:null, loginError:'',
+  activeTab: 'turno',
+  calYear: null, calMonth: null, calSelected: new Set(),
+  rosterStart: null,
+  rosterClicked: null,
+};
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function todayStr(){ const t=new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+function addDays(dateStr, n){ const [y,m,d]=dateStr.split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()+n); return dt.toISOString().slice(0,10); }
+function dowIndex(dateStr){ const [y,m,d]=dateStr.split('-').map(Number); return new Date(Date.UTC(y,m-1,d)).getUTCDay(); }
+function isWeekday(dateStr){ const d=dowIndex(dateStr); return d>=1 && d<=5; }
+function mondayOf(dateStr){ const d=dowIndex(dateStr); const back=(d===0)?6:d-1; return addDays(dateStr,-back); }
+function nextMonday(){ const t=todayStr(); const d=dowIndex(t); const fwd = d===1 ? 7 : ((8-d)%7); return addDays(t, fwd===0?7:fwd); }
+function isAdmin(id){ return state.admins.includes(id); }
+function currentPerson(){ return state.people.find(p=>p.id===state.currentUserId); }
+
+// Returns true if it had to seed defaults (empty roster) — the caller uses
+// this to decide whether a first-run write to Supabase is actually needed.
+function seedIfEmpty(){
+  if(state.people.length===0){
+    const sample=[
+      {name:'Cabo García', rank:'cabo', order:1, pin:'1234', mustChangePin:true},
+      {name:'Cabo Muñoz', rank:'cabo', order:2, pin:'1234', mustChangePin:true},
+      {name:'Soldado Ruiz', rank:'soldado', order:1, pin:'1234', mustChangePin:true},
+      {name:'Soldado Torres', rank:'soldado', order:2, pin:'1234', mustChangePin:true},
+      {name:'Soldado Vidal', rank:'soldado', order:3, pin:'1234', mustChangePin:true},
+      {name:'Soldado Ortega', rank:'soldado', order:4, pin:'1234', mustChangePin:true},
+    ];
+    state.people = sample.map(p=>({id:uid(), ...p}));
+    state.creatorId = state.people[0].id;
+    state.admins = [state.people[0].id];
+    state.anchorDate = nextMonday();
+    return true;
+  }
+  return false;
+}
+
+// ---------- ROTATION ----------
+function rotationOrder(){
+  const cabos = state.people.filter(p=>p.rank==='cabo').sort((a,b)=>a.order-b.order);
+  const soldados = state.people.filter(p=>p.rank==='soldado').sort((a,b)=>a.order-b.order);
+  return [...cabos, ...soldados];
+}
+function approvedFor(personId, d){ return state.exceptions.filter(e=>e.personId===personId && e.status==='approved' && d>=e.start && d<=e.end); }
+function pendingFor(personId, d){ return state.exceptions.filter(e=>e.personId===personId && e.status==='pending' && d>=e.start && d<=e.end); }
+
+function computeSchedule(rangeStart, rangeEnd){
+  const order = rotationOrder();
+  const map = {};
+  if(order.length===0) return map;
+  let pointer=0, d=state.anchorDate, safety=0;
+  while(d<=rangeEnd && safety<4000){
+    safety++;
+    if(isWeekday(d)){
+      let tries=0, idx=pointer, assigned=null;
+      while(tries<order.length){
+        const cand = order[idx%order.length];
+        if(approvedFor(cand.id,d).length===0){ assigned=cand; pointer=(idx+1)%order.length; break; }
+        idx++; tries++;
+      }
+      if(d>=rangeStart) map[d] = assigned ? assigned.id : null;
+    }
+    d=addDays(d,1);
+  }
+  return map;
+}
+
+// ---------- RENDER ----------
+const app = document.getElementById('app');
+
+function render(){
+  if(!state.currentUserId){ renderLogin(); return; }
+  if(state.calYear===null){ const t=new Date(); state.calYear=t.getFullYear(); state.calMonth=t.getMonth(); }
+  if(state.rosterStart===null){ state.rosterStart = mondayOf(todayStr()); }
+  let html = renderHeader() + renderTabs() + `<div id="tabContent">${renderTabContent()}</div>`;
+  app.innerHTML = html;
+  attachHandlers();
+}
+
+function renderHeader(){
+  const me = currentPerson();
+  const meAdmin = me && isAdmin(me.id);
+  return `
+    <header>
+      <div class="unit-title">🪖 Turnos de Cuartelero <span class="tag">${meAdmin?'ADMIN':'BATALLÓN'}</span></div>
+      <div class="user-row"><span>Conectado como <b>${me?me.name:'—'}</b></span><a class="switch-link" id="switchUserBtn">cambiar</a></div>
+    </header>`;
+}
+
+function renderTabs(){
+  const me = currentPerson();
+  const meAdmin = me && isAdmin(me.id);
+  const pendingCount = state.exceptions.filter(e=>e.status==='pending').length;
+  let tabs = [ {id:'turno', label:'Turno cuartelero'}, {id:'mical', label:'Mi calendario'} ];
+  if(meAdmin){
+    tabs.push({id:'solicitudes', label:'Solicitudes', badge: pendingCount>0?pendingCount:null});
+    tabs.push({id:'personal', label:'Personal'});
+  }
+  return `<div class="tabs">${tabs.map(t=>`
+    <div class="tab ${state.activeTab===t.id?'active':''}" data-tab="${t.id}">${t.label}${t.badge?`<span class="badge">${t.badge}</span>`:''}</div>
+  `).join('')}</div>`;
+}
+
+function renderTabContent(){
+  if(state.activeTab==='turno') return renderTurno();
+  if(state.activeTab==='mical') return renderMiCalendario();
+  if(state.activeTab==='solicitudes') return renderSolicitudes();
+  if(state.activeTab==='personal') return renderPersonal();
+  return '';
+}
+
+// ---- TURNO DEL EQUIPO (grid) ----
+function renderTurno(){
+  const start = state.rosterStart;
+  const end = addDays(start,13);
+  const people = rotationOrder();
+
+  if(people.length===0){
+    return `
+      <div class="card">
+        <div class="warn-banner">⚠ No hay ningún cabo ni soldado cargado todavía, por eso el turno sale vacío. Ve a "Personal" y añade a la gente de la unidad.</div>
+      </div>
+    `;
+  }
+
+  const schedule = computeSchedule(start,end);
+  const today = todayStr();
+
+  const days = [];
+  for(let i=0;i<14;i++) days.push(addDays(start,i));
+
+  const noOneDates = days.filter(d=>isWeekday(d) && d>=state.anchorDate && !schedule[d]);
+  const warnBanner = noOneDates.length>0 ? `
+    <div class="warn-banner">⚠ Sin nadie disponible el ${noOneDates.join(', ')}. Revisa las excepciones aprobadas de esos días — puede que se solapen y no quede nadie libre en la rotación.</div>
+  ` : '';
+  const beforeStart = days.filter(d=>isWeekday(d) && d<state.anchorDate);
+  const beforeBanner = beforeStart.length>0 ? `
+    <div class="hint" style="margin-bottom:10px;">El turno empieza el ${state.anchorDate}. Los días laborables antes de esa fecha se muestran vacíos a propósito.</div>
+  ` : '';
+
+  const headerCells = days.map(d=>{
+    const dt = new Date(d+'T00:00:00');
+    const isToday = d===today;
+    return `<th class="${isToday?'today-col':''}">${DOW_MON[dowIndex(d)===0?6:dowIndex(d)-1]}<br>${dt.getDate()}/${dt.getMonth()+1}</th>`;
+  }).join('');
+
+  const rows = people.map(p=>{
+    const cells = days.map(d=>{
+      const isToday = d===today;
+      const appr = approvedFor(p.id,d);
+      const pend = pendingFor(p.id,d);
+      let inner = '';
+      if(appr.length>0){ inner = `<span class="cbadge approved">${rt(appr[0].type).short}</span>`; }
+      else if(schedule[d] === p.id){ inner = `<span class="cbadge duty">CUART</span>`; }
+      else if(pend.length>0){ inner = `<span class="cbadge pending">${rt(pend[0].type).short}</span>`; }
+      const clicked = state.rosterClicked && state.rosterClicked.personId===p.id && state.rosterClicked.date===d;
+      return `<td class="day-cell ${isToday?'today-col':''} ${clicked?'clicked':''}" data-cell="${p.id}|${d}">${inner}</td>`;
+    }).join('');
+    return `<tr><td class="name-col">${p.name}</td>${cells}</tr>`;
+  }).join('');
+
+  let infoBox = '';
+  if(state.rosterClicked){
+    const p = state.people.find(x=>x.id===state.rosterClicked.personId);
+    const d = state.rosterClicked.date;
+    const appr = approvedFor(p.id,d);
+    const pend = pendingFor(p.id,d);
+    const isDuty = schedule[d]===p.id;
+    const me = currentPerson(); const meAdmin = isAdmin(me.id);
+    let detail = '';
+    if(appr.length>0) detail = `${rt(appr[0].type).label}${appr[0].justification? ' — '+appr[0].justification:''}`;
+    else if(pend.length>0) detail = `Pendiente de aprobar: ${rt(pend[0].type).label}${pend[0].justification? ' — '+pend[0].justification:''}`;
+    else if(isDuty) detail = 'Cuartelero este día';
+    else if(d < state.anchorDate) detail = `Antes del inicio del turno (empieza el ${state.anchorDate})`;
+    else if(isWeekday(d)) detail = 'Sin novedad (no le toca)';
+    else detail = 'Fin de semana';
+    infoBox = `
+      <div class="info-box">
+        <div class="who">${p.name} · ${d}</div>
+        <div>${detail}</div>
+        ${meAdmin && appr.length>0 ? `
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="btn btn-danger btn-sm" data-removeexc="${appr[0].id}">Quitar esta excepción</button>
+          </div>` : ''}
+        ${meAdmin && pend.length>0 ? `
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="btn btn-primary btn-sm" data-approve="${pend[0].id}">Aprobar</button>
+            <button class="btn btn-danger btn-sm" data-reject="${pend[0].id}">Rechazar</button>
+          </div>` : ''}
+        ${meAdmin && appr.length===0 ? `
+          <div style="margin-top:10px;">
+            <label class="small">Marcar excepción directa para este día</label>
+            <select id="quickType">${REASON_TYPES.map(r=>`<option value="${r.id}">${r.label}</option>`).join('')}</select>
+            <div id="quickJustifWrap" style="margin-top:8px;">
+              <textarea id="quickJustif" rows="2" placeholder="Justificación"></textarea>
+            </div>
+            <button class="btn btn-primary btn-block" id="quickAddBtn" style="margin-top:8px;">Aplicar a ${p.name} el ${d}</button>
+          </div>` : ''}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card">
+      <div class="hint">Personal en rotación: ${people.length} (${state.people.filter(p=>p.rank==='cabo').length} cabos, ${state.people.filter(p=>p.rank==='soldado').length} soldados) · Excepciones guardadas: ${state.exceptions.length} · Inicio: ${state.anchorDate}</div>
+      ${beforeBanner}
+      ${warnBanner}
+      <div class="roster-nav">
+        <button data-shift="-14">‹ 2 sem</button>
+        <span class="label">${new Date(start+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})} – ${new Date(end+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</span>
+        <button data-shift="14">2 sem ›</button>
+      </div>
+      <div class="roster-wrap">
+        <table class="roster">
+          <thead><tr><th class="name-col">Personal</th>${headerCells}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="hint">Toca cualquier casilla para ver el detalle${isAdmin(currentPerson().id)?' o marcar una excepción directamente':''}.</div>
+      ${infoBox}
+    </div>
+  `;
+}
+
+// ---- MI CALENDARIO (month view, multi-select) ----
+function renderMiCalendario(){
+  const me = currentPerson();
+  const y = state.calYear, m = state.calMonth;
+  const first = new Date(y,m,1);
+  const startOffset = (first.getDay()===0)?6:first.getDay()-1;
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const today = todayStr();
+
+  const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const monthEnd = `${y}-${String(m+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+  const monthSchedule = computeSchedule(monthStart, monthEnd);
+
+  let cells = '';
+  for(let i=0;i<startOffset;i++) cells += `<div class="cal-day blank"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const appr = approvedFor(me.id, ds).length>0;
+    const pend = pendingFor(me.id, ds).length>0;
+    const onDuty = monthSchedule[ds] === me.id;
+    const selected = state.calSelected.has(ds);
+    const isToday = ds===today;
+    cells += `<div class="cal-day ${selected?'selected':''} ${isToday?'today-marker':''} ${onDuty?'on-duty':''}" data-day="${ds}">
+      ${day}
+      ${onDuty && !selected? `<span class="cal-dot duty"></span>`:''}
+      ${appr && !selected? `<span class="cal-dot approved"></span>`:''}
+      ${pend && !selected? `<span class="cal-dot pending"></span>`:''}
+    </div>`;
+  }
+
+  const selCount = state.calSelected.size;
+  let selectionBar = '';
+  if(selCount>0){
+    selectionBar = `
+      <div class="selection-bar">
+        <div class="card-title" style="margin-bottom:8px;">${selCount} día${selCount>1?'s':''} seleccionado${selCount>1?'s':''}</div>
+        <label class="small">Motivo</label>
+        <select id="calType">${REASON_TYPES.map(r=>`<option value="${r.id}">${r.label}</option>`).join('')}</select>
+        <div id="calJustifWrap" style="margin-top:10px;">
+          <label class="small">Justificación (obligatoria)</label>
+          <textarea id="calJustif" rows="2" placeholder="Ej: DO de la guardia del viernes pasado"></textarea>
+        </div>
+        <div class="hint">${isAdmin(me.id) ? 'Se aplicará directamente.' : 'Quedará pendiente hasta que un admin lo apruebe.'}</div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-secondary" id="clearSelBtn">Cancelar</button>
+          <button class="btn btn-primary" id="applyCalBtn">Guardar</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const myList = state.exceptions.filter(e=>e.personId===me.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
+  const listHtml = myList.length===0 ? `<div class="empty-state">Todavía no has marcado ningún día.</div>` : myList.map(e=>`
+    <div class="req-item">
+      <div class="req-top">
+        <div><div class="req-type">${rt(e.type).label}</div><div class="req-dates">${e.start}${e.start!==e.end? ' → '+e.end:''}</div></div>
+        <span class="status-chip" style="background:${e.status==='approved'?'var(--olive-dim)':(e.status==='rejected'?'var(--danger)':'var(--amber-dim)')}; color:${e.status==='approved'?'#e9e6d8':'#f4e6c8'}">${e.status==='approved'?'APROBADO':(e.status==='rejected'?'RECHAZADO':'PENDIENTE')}</span>
+      </div>
+      ${e.justification? `<div class="req-justif">${e.justification}</div>`:''}
+      ${e.status==='pending'? `<div class="btn-row" style="margin-top:8px;"><button class="btn btn-danger btn-sm" data-cancel="${e.id}">Cancelar</button></div>`:''}
+    </div>
+  `).join('');
+
+  return `
+    <div class="card">
+      <div class="month-nav">
+        <button data-monthshift="-1">‹</button>
+        <span class="label">${MONTHS[m]} ${y}</span>
+        <button data-monthshift="1">›</button>
+      </div>
+      <div class="cal-grid">
+        ${DOW_MON.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
+        ${cells}
+      </div>
+      <div class="hint">🔴 Punto rojo = te toca cuartelero ese día.</div>
+      ${selectionBar}
+    </div>
+    <div class="card">
+      <div class="card-title">Tus últimos días marcados</div>
+      ${listHtml}
+    </div>
+  `;
+}
+
+function renderSolicitudes(){
+  const people = rotationOrder();
+  const personOptions = people.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const typeOptions = REASON_TYPES.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+  const rangeForm = people.length===0 ? '' : `
+    <div class="card">
+      <div class="card-title">Marcar un periodo entero para alguien (ej: 20 días de vacaciones de golpe)</div>
+      <label class="small">Persona</label>
+      <select id="rangePerson">${personOptions}</select>
+      <label class="small" style="margin-top:10px;">Motivo</label>
+      <select id="rangeType">${typeOptions}</select>
+      <div id="rangeJustifWrap" style="margin-top:10px;">
+        <label class="small">Justificación</label>
+        <textarea id="rangeJustif" rows="2"></textarea>
+      </div>
+      <div class="range-row" style="margin-top:10px;">
+        <div class="field">
+          <label class="small">Desde</label>
+          <input type="date" id="rangeStart" value="${todayStr()}">
+        </div>
+        <div class="field">
+          <label class="small">Hasta</label>
+          <input type="date" id="rangeEnd" value="${todayStr()}">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="submitRangeBtn" style="margin-top:12px;">Aplicar a todo el periodo</button>
+    </div>
+  `;
+
+  const pending = state.exceptions.filter(e=>e.status==='pending').sort((a,b)=>a.createdAt-b.createdAt);
+  let list = pending.length===0 ? `<div class="empty-state">No hay solicitudes pendientes.</div>` : pending.map(e=>{
+    const person = state.people.find(p=>p.id===e.personId);
+    return `
+      <div class="req-item">
+        <div class="req-person">${person?person.name:'—'}</div>
+        <div class="req-top"><div><div class="req-type">${rt(e.type).label}</div><div class="req-dates">${e.start}${e.start!==e.end?' → '+e.end:''}</div></div></div>
+        ${e.justification? `<div class="req-justif">${e.justification}</div>`:''}
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-primary btn-sm" data-approve="${e.id}">Aprobar</button>
+          <button class="btn btn-danger btn-sm" data-reject="${e.id}">Rechazar</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const all = [...state.exceptions].sort((a,b)=>b.createdAt-a.createdAt);
+  let allList = all.length===0 ? `<div class="empty-state">Todavía no hay ninguna excepción registrada.</div>` : all.map(e=>{
+    const person = state.people.find(p=>p.id===e.personId);
+    const chipColor = e.status==='approved'?'var(--olive-dim)':(e.status==='rejected'?'var(--danger)':'var(--amber-dim)');
+    const chipText = e.status==='approved'?'APROBADO':(e.status==='rejected'?'RECHAZADO':'PENDIENTE');
+    return `
+      <div class="req-item">
+        <div class="req-top">
+          <div>
+            <div class="req-person">${person?person.name:'—'}</div>
+            <div class="req-type">${rt(e.type).label}</div>
+            <div class="req-dates">${e.start}${e.start!==e.end?' → '+e.end:''}</div>
+          </div>
+          <span class="status-chip" style="background:${chipColor}; color:#eee;">${chipText}</span>
+        </div>
+        ${e.justification? `<div class="req-justif">${e.justification}</div>`:''}
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-danger btn-sm" data-deleteexc="${e.id}">Borrar</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    ${rangeForm}
+    <div class="card"><div class="card-title">Solicitudes pendientes</div>${list}</div>
+    <div class="card">
+      <div class="card-title">Todas las excepciones (revisar / limpiar)</div>
+      ${allList}
+      ${all.length>0? `<button class="btn btn-danger btn-block" id="clearAllExcBtn" style="margin-top:10px;">Vaciar todas las excepciones</button>` : ''}
+    </div>
+  `;
+}
+
+function renderPersonal(){
+  const me = currentPerson();
+  const isCreator = me.id===state.creatorId;
+  const groups = [{label:'Cabos (por antigüedad)', rank:'cabo'},{label:'Soldados (por antigüedad)', rank:'soldado'}];
+  const groupsHtml = groups.map(g=>{
+    const list = state.people.filter(p=>p.rank===g.rank).sort((a,b)=>a.order-b.order);
+    const rows = list.map((p,i)=>`
+      <div class="person-row">
+        <div class="order-btns">
+          <button data-move="${p.id}:up" ${i===0?'disabled':''}>▲</button>
+          <button data-move="${p.id}:down" ${i===list.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="person-name">${p.name} ${isAdmin(p.id)?'<span class="admin-star">★ admin</span>':''}</div>
+        <button class="btn btn-secondary btn-sm" data-editname="${p.id}">Nombre</button>
+        <button class="btn btn-secondary btn-sm" data-togglerank="${p.id}">${p.rank==='cabo'?'→ SDO':'→ CBO'}</button>
+        <button class="btn btn-secondary btn-sm" data-editpin="${p.id}">PIN</button>
+        ${isCreator? `<button class="btn btn-secondary btn-sm" data-toggleadmin="${p.id}">${isAdmin(p.id)?'Quitar admin':'Hacer admin'}</button>`:''}
+        <button class="btn btn-danger btn-sm" data-remove="${p.id}">✕</button>
+      </div>
+    `).join('') || `<div class="hint">Sin personal en este grupo.</div>`;
+    return `<div class="card"><div class="card-title">${g.label}</div>${rows}</div>`;
+  }).join('');
+
+  const order = rotationOrder();
+  const firstPersonName = order.length? order[0].name : '—';
+  return `
+    <div class="card">
+      <div class="card-title">Inicio del turno</div>
+      <label class="small">El turno empieza a contar desde este día</label>
+      <input type="date" id="anchorDateInput" value="${state.anchorDate}">
+      <div class="hint">Con la fecha y el orden actual, el primer día laborable a partir de ahí le toca a <b>${firstPersonName}</b>, y sigue en orden desde ahí (cabos por antigüedad, luego soldados por antigüedad).</div>
+      <button class="btn btn-primary btn-block" id="saveAnchorBtn" style="margin-top:10px;">Guardar fecha de inicio</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Añadir persona</div>
+      <label class="small">Nombre</label>
+      <input type="text" id="newPersonName" placeholder="Nombre y apellido">
+      <label class="small" style="margin-top:10px;">Empleo</label>
+      <select id="newPersonRank"><option value="cabo">CBO</option><option value="soldado">SDO</option></select>
+      <label class="small" style="margin-top:10px;">Código personal (PIN)</label>
+      <input type="text" id="newPersonPin" placeholder="Ej: 4821">
+      <button class="btn btn-primary btn-block" id="addPersonBtn" style="margin-top:12px;">Añadir a la lista</button>
+    </div>
+    ${groupsHtml}
+  `;
+}
+
+// ---- LOGIN ----
+function renderLogin(){
+  seedIfEmpty();
+  if(state.loginStep==='pin'){
+    const p = state.people.find(x=>x.id===state.loginPersonId);
+    app.innerHTML = `
+      <header><div class="unit-title">🪖 Turnos de Cuartelero</div></header>
+      <div class="card">
+        <div class="card-title">Código de ${p.name}</div>
+        <label class="small">Introduce tu código personal</label>
+        <input type="password" inputmode="numeric" id="pinInput" placeholder="••••" autofocus>
+        ${state.loginError? `<div class="error-text">${state.loginError}</div>`:''}
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-secondary" id="backToChoose">Atrás</button>
+          <button class="btn btn-primary" id="confirmPin">Entrar</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('backToChoose').addEventListener('click', ()=>{ state.loginStep='choose'; state.loginError=''; render(); });
+    document.getElementById('confirmPin').addEventListener('click', async ()=>{
+      const val = document.getElementById('pinInput').value.trim();
+      if(val === p.pin){
+        state.loginError='';
+        if(p.mustChangePin){ state.loginStep='setpin'; render(); }
+        else {
+          state.currentUserId = p.id; state.loginStep='choose';
+          await sSet('currentUserId', state.currentUserId, false);
+          render();
+        }
+      } else {
+        state.loginError = 'Código incorrecto.'; render();
+      }
+    });
+    return;
+  }
+  if(state.loginStep==='setpin'){
+    const p = state.people.find(x=>x.id===state.loginPersonId);
+    app.innerHTML = `
+      <header><div class="unit-title">🪖 Turnos de Cuartelero</div></header>
+      <div class="card">
+        <div class="card-title">Crea tu código personal</div>
+        <div class="hint" style="margin-bottom:12px;">Es la primera vez que entras, ${p.name}. Antes de continuar, cambia el código temporal por uno tuyo (solo tú lo sabrás).</div>
+        <label class="small">Nuevo código</label>
+        <input type="password" inputmode="numeric" id="newPinInput" placeholder="Ej: 7392">
+        <label class="small" style="margin-top:10px;">Repítelo</label>
+        <input type="password" inputmode="numeric" id="newPinInput2" placeholder="Repite el código">
+        ${state.loginError? `<div class="error-text">${state.loginError}</div>`:''}
+        <button class="btn btn-primary btn-block" id="saveNewPin" style="margin-top:12px;">Guardar y entrar</button>
+      </div>
+    `;
+    document.getElementById('saveNewPin').addEventListener('click', async ()=>{
+      const v1 = document.getElementById('newPinInput').value.trim();
+      const v2 = document.getElementById('newPinInput2').value.trim();
+      if(!v1 || v1.length<4){ state.loginError='Usa al menos 4 caracteres.'; render(); return; }
+      if(v1!==v2){ state.loginError='Los dos códigos no coinciden.'; render(); return; }
+      p.pin = v1; p.mustChangePin = false;
+      state.currentUserId = p.id; state.loginStep='choose'; state.loginError='';
+      await persistShared();
+      await sSet('currentUserId', state.currentUserId, false);
+      render();
+    });
+    return;
+  }
+  const rows = state.people.map(p=>`
+    <div class="login-btn" data-login="${p.id}"><span>${p.name}</span><span class="rank-pill ${p.rank}">${p.rank==='cabo'?'CBO':'SDO'}</span></div>
+  `).join('');
+  app.innerHTML = `
+    <header><div class="unit-title">🪖 Turnos de Cuartelero</div><div class="hint" style="margin-top:8px;">Elige tu nombre y luego tu código personal.</div></header>
+    <div class="card"><div class="card-title">¿Quién eres?</div><div class="login-list">${rows}</div></div>
+  `;
+  document.querySelectorAll('[data-login]').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.loginPersonId = el.getAttribute('data-login'); state.loginStep='pin'; render(); });
+  });
+}
+
+// ---------- PERSISTENCE ----------
+// Only people/admins/creatorId/anchorDate live here now — this blob changes
+// rarely, so the risk of two people overwriting each other is low. Exceptions
+// no longer travel through this function at all (see EXCEPTIONS section above).
+async function persistShared(){
+  const ok = await sSet('appState', {
+    people: state.people,
+    admins: state.admins,
+    creatorId: state.creatorId,
+    anchorDate: state.anchorDate,
+  }, true);
+  if(!ok){
+    alert('⚠ No se ha podido guardar este cambio (fallo de conexión). Vuelve a intentarlo — si no, se perderá.');
+  }
+  return ok;
+}
+
+// ---------- HANDLERS ----------
+function attachHandlers(){
+  const switchBtn = document.getElementById('switchUserBtn');
+  if(switchBtn) switchBtn.addEventListener('click', async ()=>{ state.currentUserId=null; await sSet('currentUserId', null, false); render(); });
+
+  document.querySelectorAll('.tab').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.activeTab = el.getAttribute('data-tab'); state.rosterClicked=null; render(); });
+  });
+
+  if(state.activeTab==='turno'){
+    document.querySelectorAll('[data-shift]').forEach(el=>{
+      el.addEventListener('click', ()=>{ state.rosterStart = addDays(state.rosterStart, parseInt(el.getAttribute('data-shift'))); state.rosterClicked=null; render(); });
+    });
+    document.querySelectorAll('[data-cell]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const [personId, date] = el.getAttribute('data-cell').split('|');
+        if(state.rosterClicked && state.rosterClicked.personId===personId && state.rosterClicked.date===date){ state.rosterClicked=null; }
+        else { state.rosterClicked = {personId, date}; }
+        render();
+      });
+    });
+    const quickType = document.getElementById('quickType');
+    const quickJustifWrap = document.getElementById('quickJustifWrap');
+    if(quickType){ const sync=()=>{ quickJustifWrap.style.display = rt(quickType.value).needsJustif?'block':'none'; }; sync(); quickType.addEventListener('change', sync); }
+    const quickAddBtn = document.getElementById('quickAddBtn');
+    if(quickAddBtn) quickAddBtn.addEventListener('click', async ()=>{
+      const type = document.getElementById('quickType').value;
+      const justif = document.getElementById('quickJustif').value.trim();
+      if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
+      const {personId, date} = state.rosterClicked;
+      const exc = {id:uid(), personId, type, justification:justif, start:date, end:date, status:'approved', createdAt:Date.now()};
+      const ok = await insertExceptions([exc]);
+      if(ok){ state.exceptions.push(exc); state.rosterClicked=null; }
+      render();
+    });
+    document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-approve');
+      const ok = await updateExceptionField(id, {status:'approved'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      render();
+    }));
+    document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-reject');
+      const ok = await updateExceptionField(id, {status:'rejected'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      render();
+    }));
+    document.querySelectorAll('[data-removeexc]').forEach(el=>el.addEventListener('click', async ()=>{
+      if(!confirm('¿Quitar esta excepción? La persona volverá a entrar en la rotación normal ese día.')) return;
+      const id = el.getAttribute('data-removeexc');
+      const ok = await deleteExceptionRow(id);
+      if(ok){ state.exceptions = state.exceptions.filter(x=>x.id!==id); state.rosterClicked=null; }
+      render();
+    }));
+  }
+
+  if(state.activeTab==='mical'){
+    document.querySelectorAll('[data-monthshift]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        let m = state.calMonth + parseInt(el.getAttribute('data-monthshift'));
+        let y = state.calYear;
+        if(m<0){m=11;y--;} if(m>11){m=0;y++;}
+        state.calMonth=m; state.calYear=y; state.calSelected=new Set(); render();
+      });
+    });
+    document.querySelectorAll('[data-day]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const ds = el.getAttribute('data-day');
+        if(state.calSelected.has(ds)) state.calSelected.delete(ds); else state.calSelected.add(ds);
+        render();
+      });
+    });
+    const calType = document.getElementById('calType');
+    const calJustifWrap = document.getElementById('calJustifWrap');
+    if(calType){ const sync=()=>{ calJustifWrap.style.display = rt(calType.value).needsJustif?'block':'none'; }; sync(); calType.addEventListener('change', sync); }
+    const clearSelBtn = document.getElementById('clearSelBtn');
+    if(clearSelBtn) clearSelBtn.addEventListener('click', ()=>{ state.calSelected=new Set(); render(); });
+    const applyCalBtn = document.getElementById('applyCalBtn');
+    if(applyCalBtn) applyCalBtn.addEventListener('click', async ()=>{
+      const type = document.getElementById('calType').value;
+      const justif = document.getElementById('calJustif').value.trim();
+      if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
+      const me = currentPerson();
+      const status = isAdmin(me.id) ? 'approved' : 'pending';
+      const newExcs = [];
+      state.calSelected.forEach(ds=>{
+        newExcs.push({id:uid(), personId:me.id, type, justification: rt(type).needsJustif? justif:'', start:ds, end:ds, status, createdAt:Date.now()});
+      });
+      const ok = await insertExceptions(newExcs);
+      if(ok){ state.exceptions.push(...newExcs); state.calSelected = new Set(); }
+      render();
+    });
+    document.querySelectorAll('[data-cancel]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-cancel');
+      const ok = await deleteExceptionRow(id);
+      if(ok){ state.exceptions = state.exceptions.filter(e=>e.id!==id); }
+      render();
+    }));
+  }
+
+  if(state.activeTab==='solicitudes'){
+    const rangeType = document.getElementById('rangeType');
+    const rangeJustifWrap = document.getElementById('rangeJustifWrap');
+    if(rangeType){ const sync=()=>{ rangeJustifWrap.style.display = rt(rangeType.value).needsJustif?'block':'none'; }; sync(); rangeType.addEventListener('change', sync); }
+    const submitRangeBtn = document.getElementById('submitRangeBtn');
+    if(submitRangeBtn) submitRangeBtn.addEventListener('click', async ()=>{
+      const personId = document.getElementById('rangePerson').value;
+      const type = document.getElementById('rangeType').value;
+      const justif = document.getElementById('rangeJustif').value.trim();
+      const start = document.getElementById('rangeStart').value;
+      const end = document.getElementById('rangeEnd').value;
+      if(!start || !end || end < start){ alert('Revisa las fechas.'); return; }
+      if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
+      const exc = {
+        id: uid(), personId, type, justification: rt(type).needsJustif? justif:'',
+        start, end, status:'approved', createdAt: Date.now()
+      };
+      const ok = await insertExceptions([exc]);
+      if(ok) state.exceptions.push(exc);
+      render();
+    });
+    document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-approve');
+      const ok = await updateExceptionField(id, {status:'approved'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      render();
+    }));
+    document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-reject');
+      const ok = await updateExceptionField(id, {status:'rejected'});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      render();
+    }));
+    document.querySelectorAll('[data-deleteexc]').forEach(el=>el.addEventListener('click', async ()=>{
+      if(!confirm('¿Borrar esta excepción?')) return;
+      const id = el.getAttribute('data-deleteexc');
+      const ok = await deleteExceptionRow(id);
+      if(ok) state.exceptions = state.exceptions.filter(x=>x.id!==id);
+      render();
+    }));
+    const clearAllExcBtn = document.getElementById('clearAllExcBtn');
+    if(clearAllExcBtn) clearAllExcBtn.addEventListener('click', async ()=>{
+      if(!confirm('¿Vaciar TODAS las excepciones de todo el mundo? Esto no se puede deshacer.')) return;
+      const ok = await deleteAllExceptionRows();
+      if(ok) state.exceptions = [];
+      render();
+    });
+  }
+
+  if(state.activeTab==='personal'){
+    const saveAnchorBtn = document.getElementById('saveAnchorBtn');
+    if(saveAnchorBtn) saveAnchorBtn.addEventListener('click', async ()=>{
+      const val = document.getElementById('anchorDateInput').value;
+      if(!val){ alert('Elige una fecha.'); return; }
+      state.anchorDate = val;
+      await persistShared(); render();
+      alert('Fecha de inicio actualizada.');
+    });
+    document.querySelectorAll('[data-move]').forEach(el=>el.addEventListener('click', async ()=>{
+      const [id,dir] = el.getAttribute('data-move').split(':');
+      const person = state.people.find(p=>p.id===id);
+      const sib = state.people.filter(p=>p.rank===person.rank).sort((a,b)=>a.order-b.order);
+      const idx = sib.findIndex(p=>p.id===id);
+      const swapIdx = dir==='up'?idx-1:idx+1;
+      if(swapIdx<0||swapIdx>=sib.length) return;
+      const tmp = sib[idx].order; sib[idx].order = sib[swapIdx].order; sib[swapIdx].order = tmp;
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-remove]').forEach(el=>el.addEventListener('click', async ()=>{
+      if(!confirm('¿Quitar a esta persona de la lista?')) return;
+      const id = el.getAttribute('data-remove');
+      state.people = state.people.filter(p=>p.id!==id);
+      state.admins = state.admins.filter(a=>a!==id);
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-toggleadmin]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-toggleadmin');
+      if(state.admins.includes(id)) state.admins = state.admins.filter(a=>a!==id); else state.admins.push(id);
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-togglerank]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-togglerank');
+      const p = state.people.find(x=>x.id===id);
+      const newRank = p.rank==='cabo' ? 'soldado' : 'cabo';
+      const sib = state.people.filter(x=>x.rank===newRank);
+      const maxOrder = sib.length? Math.max(...sib.map(x=>x.order)) : 0;
+      p.rank = newRank;
+      p.order = maxOrder+1;
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-editname]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-editname');
+      const p = state.people.find(x=>x.id===id);
+      const newName = prompt('Nuevo nombre para esta persona (empleo + apellido, ej: "Soldado Gallega")', p.name);
+      if(newName===null || newName.trim()==='') return;
+      p.name = newName.trim();
+      await persistShared(); render();
+    }));
+    document.querySelectorAll('[data-editpin]').forEach(el=>el.addEventListener('click', async ()=>{
+      const id = el.getAttribute('data-editpin');
+      const p = state.people.find(x=>x.id===id);
+      const val = prompt('Nuevo código temporal para '+p.name+' (se le pedirá que lo cambie al entrar)', p.pin||'');
+      if(val===null || val.trim()==='') return;
+      p.pin = val.trim();
+      p.mustChangePin = true;
+      await persistShared(); render();
+    }));
+    const addBtn = document.getElementById('addPersonBtn');
+    if(addBtn) addBtn.addEventListener('click', async ()=>{
+      const name = document.getElementById('newPersonName').value.trim();
+      const rank = document.getElementById('newPersonRank').value;
+      const pin = document.getElementById('newPersonPin').value.trim();
+      if(!name){ alert('Escribe un nombre.'); return; }
+      if(!pin){ alert('Asigna un código personal.'); return; }
+      const sib = state.people.filter(p=>p.rank===rank);
+      const maxOrder = sib.length? Math.max(...sib.map(p=>p.order)) : 0;
+      state.people.push({id:uid(), name, rank, order:maxOrder+1, pin, mustChangePin:true});
+      await persistShared(); render();
+    });
+  }
+}
+
+// ---------- INIT ----------
+async function init(){
+  const [appRes, userRes, excRes] = await Promise.all([
+    sGetSafe('appState', true),
+    sGetSafe('currentUserId', false),
+    fetchExceptions(),
+  ]);
+  if(!appRes.ok || !excRes.ok){
+    renderConnError();
+    return;
+  }
+  const s = appRes.value || {};
+  state.people = s.people || [];
+  state.exceptions = excRes.value;
+  state.admins = s.admins || [];
+  state.creatorId = s.creatorId || null;
+  state.anchorDate = s.anchorDate || null;
+  state.currentUserId = userRes.ok ? (userRes.value || null) : null;
+  const wasSeeded = seedIfEmpty();
+  if(state.currentUserId && !state.people.find(p=>p.id===state.currentUserId)) state.currentUserId = null;
+  // Only write back on first run (when we had to invent a default roster).
+  // Every other load just reads — it no longer blindly re-saves what it
+  // fetched, which was what let a stale, long-open tab clobber newer changes.
+  if(wasSeeded){ await persistShared(); }
+  render();
+}
+
+function renderConnError(){
+  app.innerHTML = `
+    <header><div class="unit-title">🪖 Turnos de Cuartelero</div></header>
+    <div class="card">
+      <div class="warn-banner">⚠ No se ha podido conectar con la base de datos. No se ha tocado ningún dato — probablemente sea la conexión a internet.</div>
+      <button class="btn btn-primary btn-block" id="retryBtn">Reintentar</button>
+    </div>
+  `;
+  document.getElementById('retryBtn').addEventListener('click', init);
+}
+init();
+</script>
+</body>
+</html>
