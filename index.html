@@ -131,28 +131,21 @@
 <body>
 <div class="app" id="app"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ---------- STORAGE (Supabase) ----------
 const SUPABASE_URL = 'https://pmarqdbrnpjtxcavggax.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_70hqSYnCsQBW_9qWf_RJ6Q_DcvZ_Dcj';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function sSet(key, value, shared){
   if(shared === false){
     try{ localStorage.setItem('local_'+key, JSON.stringify(value)); }catch(e){ console.error(e); }
     return true;
   }
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?apikey=${SUPABASE_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({key, value})
-    });
-    if(!res.ok) throw new Error('Supabase SET failed: '+res.status);
-    return true;
-  }catch(e){ console.error('sSet error', key, e); return false; }
+  const { error } = await supabaseClient.from('app_storage').upsert({key, value});
+  if(error){ console.error('sSet error', key, error); return false; }
+  return true;
 }
 
 // Like a plain read, but tells us whether the read actually succeeded (ok:true)
@@ -165,18 +158,16 @@ async function sGetSafe(key, shared){
       return {ok:true, value: raw ? JSON.parse(raw) : null};
     }catch(e){ return {ok:false, value:null}; }
   }
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_storage?key=eq.${encodeURIComponent(key)}&select=value&apikey=${SUPABASE_KEY}`);
-    if(!res.ok) throw new Error('Supabase GET failed: '+res.status);
-    const data = await res.json();
-    return {ok:true, value: (data && data.length>0) ? data[0].value : null};
-  }catch(e){ console.error('sGetSafe error', key, e); return {ok:false, value:null}; }
+  const { data, error } = await supabaseClient.from('app_storage').select('value').eq('key', key).maybeSingle();
+  if(error){ console.error('sGetSafe error', key, error); return {ok:false, value:null}; }
+  return {ok:true, value: data ? data.value : null};
 }
 
 // ---------- EXCEPTIONS (own table, one row each — no more full-object overwrite) ----------
 // Each exception now lives as its own row in the `exceptions` table, so two
 // people saving at the same time only ever touch their own row instead of
-// racing to overwrite one giant JSON blob.
+// racing to overwrite one giant JSON blob. reviewed_by/reviewed_at record
+// who approved or rejected it and when, for the history shown in the UI.
 function rowToException(r){
   return {
     id: r.id,
@@ -187,6 +178,8 @@ function rowToException(r){
     end: r.end_date,
     status: r.status,
     createdAt: Number(r.created_at),
+    reviewedBy: r.reviewed_by || null,
+    reviewedAt: r.reviewed_at || null,
   };
 }
 function exceptionToRow(e){
@@ -199,51 +192,77 @@ function exceptionToRow(e){
     status: e.status,
     justification: e.justification || '',
     created_at: e.createdAt,
+    reviewed_by: e.reviewedBy || null,
+    reviewed_at: e.reviewedAt || null,
   };
 }
 async function fetchExceptions(){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?select=*&apikey=${SUPABASE_KEY}`);
-    if(!res.ok) throw new Error('Supabase GET exceptions failed: '+res.status);
-    const rows = await res.json();
-    return {ok:true, value: rows.map(rowToException)};
-  }catch(e){ console.error('fetchExceptions error', e); return {ok:false, value:[]}; }
+  const { data, error } = await supabaseClient.from('exceptions').select('*');
+  if(error){ console.error('fetchExceptions error', error); return {ok:false, value:[]}; }
+  return {ok:true, value: data.map(rowToException)};
 }
 async function insertExceptions(list){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?apikey=${SUPABASE_KEY}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
-      body: JSON.stringify(list.map(exceptionToRow))
-    });
-    if(!res.ok) throw new Error('Supabase INSERT exceptions failed: '+res.status);
-    return true;
-  }catch(e){ console.error('insertExceptions error', e); alert('⚠ No se ha podido guardar (fallo de conexión). Vuelve a intentarlo.'); return false; }
+  const { error } = await supabaseClient.from('exceptions').insert(list.map(exceptionToRow));
+  if(error){ console.error('insertExceptions error', error); alert('⚠ No se ha podido guardar (fallo de conexión). Vuelve a intentarlo.'); return false; }
+  return true;
 }
-async function updateExceptionField(id, fields){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, {
-      method:'PATCH',
-      headers:{'Content-Type':'application/json', Prefer:'return=minimal'},
-      body: JSON.stringify(fields)
-    });
-    if(!res.ok) throw new Error('Supabase UPDATE exception failed: '+res.status);
-    return true;
-  }catch(e){ console.error('updateExceptionField error', e); alert('⚠ No se ha podido guardar el cambio (fallo de conexión).'); return false; }
+async function updateExceptionFields(id, fields){
+  const { error } = await supabaseClient.from('exceptions').update(fields).eq('id', id);
+  if(error){ console.error('updateExceptionFields error', error); alert('⚠ No se ha podido guardar el cambio (fallo de conexión).'); return false; }
+  return true;
 }
 async function deleteExceptionRow(id){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=eq.${encodeURIComponent(id)}&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
-    if(!res.ok) throw new Error('Supabase DELETE exception failed: '+res.status);
-    return true;
-  }catch(e){ console.error('deleteExceptionRow error', e); alert('⚠ No se ha podido borrar (fallo de conexión).'); return false; }
+  const { error } = await supabaseClient.from('exceptions').delete().eq('id', id);
+  if(error){ console.error('deleteExceptionRow error', error); alert('⚠ No se ha podido borrar (fallo de conexión).'); return false; }
+  return true;
 }
 async function deleteAllExceptionRows(){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exceptions?id=not.is.null&apikey=${SUPABASE_KEY}`, { method:'DELETE' });
-    if(!res.ok) throw new Error('Supabase DELETE all exceptions failed: '+res.status);
-    return true;
-  }catch(e){ console.error('deleteAllExceptionRows error', e); alert('⚠ No se ha podido vaciar (fallo de conexión).'); return false; }
+  const { error } = await supabaseClient.from('exceptions').delete().not('id','is',null);
+  if(error){ console.error('deleteAllExceptionRows error', error); alert('⚠ No se ha podido vaciar (fallo de conexión).'); return false; }
+  return true;
+}
+
+// Muestra quién aprobó/rechazó y cuándo, para el historial (mejora nº5)
+function reviewerLabel(e){
+  if(!e.reviewedBy) return '';
+  const person = state.people.find(p=>p.id===e.reviewedBy);
+  const name = person ? person.name : '—';
+  const date = e.reviewedAt ? new Date(e.reviewedAt).toLocaleString('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+  return `${e.status==='approved'?'Aprobado':'Rechazado'} por ${name}${date? ' · '+date : ''}`;
+}
+
+// ---------- REALTIME (mejora nº1) ----------
+// En cuanto alguien inserta/aprueba/rechaza/borra una excepción, o cambia
+// algo del bloque compartido (gente, admins, fecha de inicio), el resto de
+// dispositivos lo ven solos, sin tener que refrescar la página a mano.
+function setupRealtime(){
+  supabaseClient
+    .channel('exceptions-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'exceptions'}, payload=>{
+      if(payload.eventType==='DELETE'){
+        state.exceptions = state.exceptions.filter(e=>e.id!==payload.old.id);
+      } else {
+        const exc = rowToException(payload.new);
+        const idx = state.exceptions.findIndex(e=>e.id===exc.id);
+        if(idx>=0) state.exceptions[idx] = exc; else state.exceptions.push(exc);
+      }
+      if(state.currentUserId) render();
+    })
+    .subscribe();
+
+  supabaseClient
+    .channel('appstate-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'app_storage', filter:'key=eq.appState'}, payload=>{
+      const s = payload.new && payload.new.value;
+      if(!s) return;
+      state.people = s.people || [];
+      state.admins = s.admins || [];
+      state.creatorId = s.creatorId || null;
+      state.anchorDate = s.anchorDate || null;
+      if(state.currentUserId && !state.people.find(p=>p.id===state.currentUserId)) state.currentUserId = null;
+      if(state.currentUserId) render();
+    })
+    .subscribe();
 }
 
 // ---------- CONSTANTS ----------
@@ -547,6 +566,7 @@ function renderMiCalendario(){
         <span class="status-chip" style="background:${e.status==='approved'?'var(--olive-dim)':(e.status==='rejected'?'var(--danger)':'var(--amber-dim)')}; color:${e.status==='approved'?'#e9e6d8':'#f4e6c8'}">${e.status==='approved'?'APROBADO':(e.status==='rejected'?'RECHAZADO':'PENDIENTE')}</span>
       </div>
       ${e.justification? `<div class="req-justif">${e.justification}</div>`:''}
+      ${e.reviewedBy? `<div class="hint" style="margin-top:4px;">${reviewerLabel(e)}</div>`:''}
       ${e.status==='pending'? `<div class="btn-row" style="margin-top:8px;"><button class="btn btn-danger btn-sm" data-cancel="${e.id}">Cancelar</button></div>`:''}
     </div>
   `).join('');
@@ -632,6 +652,7 @@ function renderSolicitudes(){
           <span class="status-chip" style="background:${chipColor}; color:#eee;">${chipText}</span>
         </div>
         ${e.justification? `<div class="req-justif">${e.justification}</div>`:''}
+        ${e.reviewedBy? `<div class="hint" style="margin-top:4px;">${reviewerLabel(e)}</div>`:''}
         <div class="btn-row" style="margin-top:8px;">
           <button class="btn btn-danger btn-sm" data-deleteexc="${e.id}">Borrar</button>
         </div>
@@ -818,21 +839,26 @@ function attachHandlers(){
       const justif = document.getElementById('quickJustif').value.trim();
       if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
       const {personId, date} = state.rosterClicked;
-      const exc = {id:uid(), personId, type, justification:justif, start:date, end:date, status:'approved', createdAt:Date.now()};
+      const me0 = currentPerson();
+      const exc = {id:uid(), personId, type, justification:justif, start:date, end:date, status:'approved', createdAt:Date.now(), reviewedBy:me0.id, reviewedAt:new Date().toISOString()};
       const ok = await insertExceptions([exc]);
       if(ok){ state.exceptions.push(exc); state.rosterClicked=null; }
       render();
     });
     document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
       const id = el.getAttribute('data-approve');
-      const ok = await updateExceptionField(id, {status:'approved'});
-      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      const me = currentPerson();
+      const reviewedAt = new Date().toISOString();
+      const ok = await updateExceptionFields(id, {status:'approved', reviewed_by: me.id, reviewed_at: reviewedAt});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e){ e.status='approved'; e.reviewedBy=me.id; e.reviewedAt=reviewedAt; } }
       render();
     }));
     document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
       const id = el.getAttribute('data-reject');
-      const ok = await updateExceptionField(id, {status:'rejected'});
-      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      const me = currentPerson();
+      const reviewedAt = new Date().toISOString();
+      const ok = await updateExceptionFields(id, {status:'rejected', reviewed_by: me.id, reviewed_at: reviewedAt});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e){ e.status='rejected'; e.reviewedBy=me.id; e.reviewedAt=reviewedAt; } }
       render();
     }));
     document.querySelectorAll('[data-removeexc]').forEach(el=>el.addEventListener('click', async ()=>{
@@ -874,7 +900,9 @@ function attachHandlers(){
       const status = isAdmin(me.id) ? 'approved' : 'pending';
       const newExcs = [];
       state.calSelected.forEach(ds=>{
-        newExcs.push({id:uid(), personId:me.id, type, justification: rt(type).needsJustif? justif:'', start:ds, end:ds, status, createdAt:Date.now()});
+        const exc = {id:uid(), personId:me.id, type, justification: rt(type).needsJustif? justif:'', start:ds, end:ds, status, createdAt:Date.now()};
+        if(status==='approved'){ exc.reviewedBy = me.id; exc.reviewedAt = new Date().toISOString(); }
+        newExcs.push(exc);
       });
       const ok = await insertExceptions(newExcs);
       if(ok){ state.exceptions.push(...newExcs); state.calSelected = new Set(); }
@@ -901,9 +929,11 @@ function attachHandlers(){
       const end = document.getElementById('rangeEnd').value;
       if(!start || !end || end < start){ alert('Revisa las fechas.'); return; }
       if(rt(type).needsJustif && !justif){ alert('Este motivo necesita justificación.'); return; }
+      const meRange = currentPerson();
       const exc = {
         id: uid(), personId, type, justification: rt(type).needsJustif? justif:'',
-        start, end, status:'approved', createdAt: Date.now()
+        start, end, status:'approved', createdAt: Date.now(),
+        reviewedBy: meRange.id, reviewedAt: new Date().toISOString()
       };
       const ok = await insertExceptions([exc]);
       if(ok) state.exceptions.push(exc);
@@ -911,14 +941,18 @@ function attachHandlers(){
     });
     document.querySelectorAll('[data-approve]').forEach(el=>el.addEventListener('click', async ()=>{
       const id = el.getAttribute('data-approve');
-      const ok = await updateExceptionField(id, {status:'approved'});
-      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='approved'; }
+      const me = currentPerson();
+      const reviewedAt = new Date().toISOString();
+      const ok = await updateExceptionFields(id, {status:'approved', reviewed_by: me.id, reviewed_at: reviewedAt});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e){ e.status='approved'; e.reviewedBy=me.id; e.reviewedAt=reviewedAt; } }
       render();
     }));
     document.querySelectorAll('[data-reject]').forEach(el=>el.addEventListener('click', async ()=>{
       const id = el.getAttribute('data-reject');
-      const ok = await updateExceptionField(id, {status:'rejected'});
-      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e) e.status='rejected'; }
+      const me = currentPerson();
+      const reviewedAt = new Date().toISOString();
+      const ok = await updateExceptionFields(id, {status:'rejected', reviewed_by: me.id, reviewed_at: reviewedAt});
+      if(ok){ const e = state.exceptions.find(x=>x.id===id); if(e){ e.status='rejected'; e.reviewedBy=me.id; e.reviewedAt=reviewedAt; } }
       render();
     }));
     document.querySelectorAll('[data-deleteexc]').forEach(el=>el.addEventListener('click', async ()=>{
@@ -1035,6 +1069,7 @@ async function init(){
   // fetched, which was what let a stale, long-open tab clobber newer changes.
   if(wasSeeded){ await persistShared(); }
   render();
+  setupRealtime();
 }
 
 function renderConnError(){
