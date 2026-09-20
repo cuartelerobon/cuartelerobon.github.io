@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico Supabase</title>
+<style>
+  body{ background:#15170f; color:#e9e6d8; font-family:-apple-system,sans-serif; padding:16px; font-size:14px; }
+  h2{ font-size:15px; color:#d1a24a; margin-top:24px; }
+  pre{ background:#1e2117; border:1px solid #363c28; padding:10px; border-radius:4px; white-space:pre-wrap; word-break:break-all; }
+  .ok{ color:#8fbf6f; font-weight:700; }
+  .fail{ color:#e07a5f; font-weight:700; }
+</style>
+</head>
+<body>
+<h1>Diagnóstico Supabase</h1>
+<div id="out">Cargando...</div>
+
+<script>
+const SUPABASE_URL = 'https://pmarqdbrnpjtxcavggax.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_70hqSYnCsQBW_9qWf_RJ6Q_DcvZ_Dcj';
+
+async function testEndpoint(label, url){
+  let html = `<h2>${label}</h2>`;
+  try{
+    const res = await fetch(url);
+    const text = await res.text();
+    let pretty = text;
+    try{ pretty = JSON.stringify(JSON.parse(text), null, 2); }catch(e){}
+    html += `<div class="${res.ok?'ok':'fail'}">HTTP ${res.status} ${res.ok?'OK':'ERROR'}</div>`;
+    html += `<pre>${pretty.slice(0,3000)}</pre>`;
+  }catch(e){
+    html += `<div class="fail">Fallo de red: ${e.message}</div>`;
+  }
+  return html;
+}
+
+async function run(){
+  let out = '';
+  out += await testEndpoint('GET /exceptions (todas)', `${SUPABASE_URL}/rest/v1/exceptions?select=*&apikey=${SUPABASE_KEY}`);
+  out += await testEndpoint('GET /exceptions (solo contar)', `${SUPABASE_URL}/rest/v1/exceptions?select=id&apikey=${SUPABASE_KEY}`);
+  out += await testEndpoint('GET /app_storage (appState)', `${SUPABASE_URL}/rest/v1/app_storage?key=eq.appState&select=value&apikey=${SUPABASE_KEY}`);
+  document.getElementById('out').innerHTML = out;
+}
+run();
+</script>
+</body>
+</html>
